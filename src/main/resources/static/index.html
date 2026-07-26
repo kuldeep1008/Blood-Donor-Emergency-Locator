@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse — Blood Donor Emergency Locator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<!-- Leaflet: free, open-source map library (no API key needed, unlike Google Maps) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0a0d13;
+    --bg-panel: rgba(23,29,43,0.6);
+    --bg-panel-raised: #1b2231;
+    --line: #232b3d;
+    --text: #eef0ee;
+    --text-dim: #8892a3;
+    --crimson: #e0293b;
+    --crimson-dim: #7a1a24;
+    --teal: #1fbfa8;
+    --amber: #e0a72d;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(224,41,59,0.10), transparent 45%),
+      radial-gradient(circle at 90% 20%, rgba(31,191,168,0.06), transparent 40%);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+
+  /* subtle grain texture for depth */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 999;
+  }
+
+  .wrap { max-width: 620px; margin: 0 auto; padding: 0 20px 80px; position: relative; }
+
+  /* ===== HERO ===== */
+  .hero { padding: 48px 0 20px; text-align: center; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--crimson);
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--crimson);
+    box-shadow: 0 0 0 0 rgba(224,41,59,0.6);
+    animation: dot-pulse 1.6s infinite;
+  }
+  @keyframes dot-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(224,41,59,0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(224,41,59,0); }
+    100% { box-shadow: 0 0 0 0 rgba(224,41,59,0); }
+  }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 40px;
+    line-height: 1.08;
+    margin: 14px 0 8px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h1 span { color: var(--crimson); }
+  .subhead { color: var(--text-dim); font-size: 15px; max-width: 420px; margin: 0 auto; }
+
+  /* ===== LIVE STATS ===== */
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 24px;
+  }
+  .stat { text-align: center; }
+  .stat-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--teal);
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  /* ===== HEARTBEAT SIGNATURE LINE ===== */
+  .pulse-line-wrap {
+    margin: 28px 0 8px;
+    height: 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .pulse-line-wrap svg { width: 200%; height: 100%; }
+  .pulse-path {
+    fill: none;
+    stroke: var(--crimson);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 6px rgba(224,41,59,0.5));
+  }
+  .pulse-track { animation: slide 4s linear infinite; }
+  .fast .pulse-track { animation-duration: 1.6s; }
+  @keyframes slide {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* ===== TABS ===== */
+  .tabs {
+    display: flex;
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px;
+    gap: 4px;
+    margin: 24px 0;
+  }
+  .tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .tab-btn.active { background: var(--crimson); color: #fff; }
+  .tab-btn:not(.active):hover { background: #232b3d; color: var(--text); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: fade-in 0.25s ease; }
+  @keyframes fade-in { from { opacity: 0; transform: translateY(4px);} to {opacity:1; transform: translateY(0);} }
+
+  /* ===== PANELS / CARDS (glass) ===== */
+  .panel {
+    background: var(--bg-panel);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .panel.emergency { border-color: var(--crimson-dim); background: linear-gradient(180deg, rgba(224,41,59,0.08), transparent 40%), var(--bg-panel); }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 14px 0 6px;
+    font-weight: 500;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  .field { position: relative; }
+  input {
+    width: 100%;
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input::placeholder { color: #4d5566; }
+  input:focus {
+    outline: none;
+    border-color: var(--crimson);
+    box-shadow: 0 0 0 3px rgba(224,41,59,0.15);
+  }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .locate-btn {
+    width: 100%;
+    margin-top: 18px;
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .locate-btn:hover { border-color: var(--teal); }
+  .locate-btn:active { transform: scale(0.98); }
+  .locate-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: #4d5566; transition: background 0.2s; }
+  .locate-btn.detected .dot { background: var(--teal); box-shadow: 0 0 0 3px rgba(31,191,168,0.2); }
+
+  .location-status { font-size: 12px; color: var(--text-dim); margin: 8px 0 0; text-align: center; min-height: 16px; }
+  .location-status.ok { color: var(--teal); }
+  .location-status.err { color: var(--crimson); }
+
+  .cta {
+    width: 100%;
+    margin-top: 20px;
+    border: none;
+    padding: 15px;
+    border-radius: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta:active { transform: scale(0.98); }
+  .cta.urgent {
+    background: var(--crimson);
+    animation: urgent-glow 2s infinite;
+  }
+  @keyframes urgent-glow {
+    0% { box-shadow: 0 0 0 0 rgba(224,41,59,0.45); }
+    70% { box-shadow: 0 0 0 10px rgba(224,41,59,0); }
+    100% { box-shadow: 0 0 0 0 rgba(224,41,59,0); }
+  }
+  .cta.calm { background: var(--teal); }
+
+  /* ===== STATUS TOAST ===== */
+  .status-msg {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-msg.show { display: flex; }
+  .status-msg.success { background: rgba(31,191,168,0.12); color: var(--teal); border: 1px solid rgba(31,191,168,0.3); }
+  .status-msg.error { background: rgba(224,41,59,0.1); color: #ff8a94; border: 1px solid rgba(224,41,59,0.3); }
+  .status-msg.info { background: var(--bg-panel-raised); color: var(--text-dim); border: 1px solid var(--line); }
+
+  /* ===== RADAR VISUALIZATION ===== */
+  .radar-wrap {
+    display: none;
+    margin-top: 24px;
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+  }
+  .radar-wrap.show { display: block; animation: fade-in 0.3s ease; }
+  .radar-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .radar-ring {
+    position: absolute;
+    border: 1px solid rgba(31,191,168,0.25);
+    border-radius: 50%;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .radar-sweep {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50%; height: 2px;
+    background: linear-gradient(90deg, rgba(31,191,168,0.9), transparent);
+    transform-origin: left center;
+    animation: sweep 3s linear infinite;
+  }
+  @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .radar-ping {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 100%; height: 100%;
+    border: 1px solid rgba(31,191,168,0.5);
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    animation: ping 3s ease-out infinite;
+  }
+  @keyframes ping {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+  .radar-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 12px; height: 12px;
+    background: var(--text);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 4px rgba(238,240,238,0.15);
+    z-index: 5;
+  }
+  .radar-node {
+    position: absolute;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--crimson);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(-50%, -50%) scale(0);
+    animation: node-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(224,41,59,0.6);
+    z-index: 6;
+  }
+  @keyframes node-in { to { transform: translate(-50%, -50%) scale(1); } }
+  .radar-node:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .radar-caption {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 16px;
+    letter-spacing: 0.04em;
+  }
+  .radar-caption strong { color: var(--teal); }
+
+  /* ===== LIVE MAP ===== */
+  .map-wrap {
+    display: none;
+    margin-top: 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .map-wrap.show { display: block; animation: fade-in 0.3s ease; }
+  #help-map, #search-map { height: 260px; width: 100%; }
+  /* Dark-theme filter over the map tiles so it matches the app's look */
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9); }
+  .leaflet-popup-content-wrapper { background: var(--bg-panel-raised); color: var(--text); border-radius: 8px; }
+  .leaflet-popup-tip { background: var(--bg-panel-raised); }
+  .leaflet-popup-content { font-family: 'Inter', sans-serif; font-size: 12.5px; }
+  .map-caption {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    padding: 8px 0 2px;
+  }
+
+  /* ===== RESULTS ===== */
+  .results { margin-top: 22px; }
+  .results h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .donor-card {
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    animation: fade-in 0.3s ease;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .donor-card:hover { transform: translateY(-2px); border-color: #38445c; }
+  .donor-name { font-weight: 600; font-size: 14px; }
+  .donor-meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+  .blood-tag {
+    background: var(--crimson);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+  .empty-state { text-align: center; color: var(--text-dim); font-size: 13px; padding: 24px 0; }
+
+  footer { text-align: center; color: #4d5566; font-size: 12px; margin-top: 40px; font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <span class="eyebrow">Live · Emergency Response Network</span>
+    <h1>Every drop counts.<br><span>Every second matters.</span></h1>
+    <p class="subhead">Pulse connects patients in need with available donors nearby — instantly.</p>
+
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-num" id="stat-donors">0</div>
+        <div class="stat-label">Donors in network</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-groups">8</div>
+        <div class="stat-label">Blood groups covered</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pulse-line-wrap" id="pulse-wrap">
+    <svg viewBox="0 0 600 64" preserveAspectRatio="none">
+      <g class="pulse-track">
+        <path class="pulse-path" d="M0,32 L140,32 L155,32 L165,8 L178,58 L190,32 L205,32 L600,32
+                                     L740,32 L755,32 L765,8 L778,58 L790,32 L805,32 L1200,32" />
+      </g>
+    </svg>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('help')" id="tab-help-btn">Need Blood</button>
+    <button class="tab-btn" onclick="showTab('register')" id="tab-register-btn">Become a Donor</button>
+    <button class="tab-btn" onclick="showTab('search')" id="tab-search-btn">Search Only</button>
+  </div>
+
+  <!-- ================= HELP / EMERGENCY TAB ================= -->
+  <div id="tab-help" class="tab-content active">
+    <div class="panel emergency">
+      <label>Patient name</label>
+      <input id="help-patient" placeholder="Who needs blood?">
+
+      <div class="row-2">
+        <div>
+          <label>Blood group</label>
+          <input id="help-blood" placeholder="O+">
+        </div>
+        <div>
+          <label>Radius (km)</label>
+          <input id="help-radius" placeholder="10">
+        </div>
+      </div>
+
+      <label>Hospital <span style="color:#4d5566">— optional</span></label>
+      <input id="help-hospital" placeholder="Hospital name">
+
+      <div class="row-2">
+        <div>
+          <label>Your contact number</label>
+          <input id="help-contact" placeholder="10-digit number">
+        </div>
+        <div>
+          <label>City / Area</label>
+          <input id="help-city" placeholder="Sohna, Gurugram">
+        </div>
+      </div>
+
+      <button class="locate-btn" id="help-locate-btn" onclick="detectLocation('help')">
+        <span class="dot"></span> Use my current location
+      </button>
+      <p class="location-status" id="help-location-status"></p>
+
+      <button class="cta urgent" onclick="submitHelp()">Find Donors Now</button>
+      <div class="status-msg" id="help-status"></div>
+    </div>
+
+    <!-- Radar visualization -->
+    <div class="radar-wrap" id="help-radar">
+      <div class="radar-stage" id="help-radar-stage">
+        <div class="radar-ring" style="width:33%;height:33%;"></div>
+        <div class="radar-ring" style="width:66%;height:66%;"></div>
+        <div class="radar-ring" style="width:100%;height:100%;"></div>
+        <div class="radar-ping"></div>
+        <div class="radar-sweep"></div>
+        <div class="radar-center"></div>
+      </div>
+      <p class="radar-caption" id="help-radar-caption"></p>
+    </div>
+
+    <!-- Real map showing actual donor locations -->
+    <div class="map-wrap" id="help-map-wrap">
+      <div id="help-map"></div>
+      <p class="map-caption">Blue marker = you · Red markers = matching donors</p>
+    </div>
+
+    <div class="results" id="help-results"></div>
+  </div>
+
+  <!-- ================= REGISTER TAB ================= -->
+  <div id="tab-register" class="tab-content">
+    <div class="panel">
+      <label>Full name</label>
+      <input id="reg-name" placeholder="Your name">
+
+      <div class="row-2">
+        <div>
+          <label>Blood group</label>
+          <input id="reg-blood" placeholder="O+">
+        </div>
+        <div>
+          <label>Phone number</label>
+          <input id="reg-phone" placeholder="10-digit number">
+        </div>
+      </div>
+
+      <label>City / Area</label>
+      <input id="reg-city" placeholder="Sohna, Gurugram">
+
+      <label>Email <span style="color:#4d5566">— optional, for emergency alerts</span></label>
+      <input id="reg-email" placeholder="you@example.com">
+
+      <button class="locate-btn" id="reg-locate-btn" onclick="detectLocation('reg')">
+        <span class="dot"></span> Detect my location
+      </button>
+      <p class="location-status" id="reg-location-status"></p>
+
+      <button class="cta calm" onclick="register()">Register as Donor</button>
+      <div class="status-msg" id="reg-status"></div>
+    </div>
+  </div>
+
+  <!-- ================= SEARCH TAB ================= -->
+  <div id="tab-search" class="tab-content">
+    <div class="panel">
+      <div class="row-2">
+        <div>
+          <label>Blood group needed</label>
+          <input id="search-blood" placeholder="O+">
+        </div>
+        <div>
+          <label>Radius (km)</label>
+          <input id="search-radius" placeholder="10">
+        </div>
+      </div>
+
+      <button class="locate-btn" id="search-locate-btn" onclick="detectLocation('search')">
+        <span class="dot"></span> Use my current location
+      </button>
+      <p class="location-status" id="search-location-status"></p>
+
+      <button class="cta calm" onclick="search()">Find Donors</button>
+    </div>
+
+    <div class="radar-wrap" id="search-radar">
+      <div class="radar-stage" id="search-radar-stage">
+        <div class="radar-ring" style="width:33%;height:33%;"></div>
+        <div class="radar-ring" style="width:66%;height:66%;"></div>
+        <div class="radar-ring" style="width:100%;height:100%;"></div>
+        <div class="radar-ping"></div>
+        <div class="radar-sweep"></div>
+        <div class="radar-center"></div>
+      </div>
+      <p class="radar-caption" id="search-radar-caption"></p>
+    </div>
+
+    <div class="map-wrap" id="search-map-wrap">
+      <div id="search-map"></div>
+      <p class="map-caption">Blue marker = you · Red markers = matching donors</p>
+    </div>
+
+    <div class="results" id="results"></div>
+  </div>
+
+  <footer>PULSE — BUILT FOR THE HACKATHON</footer>
+</div>
+
+<script>
+  const API_BASE = "https://blood-donor-emergency-locator.onrender.com/api";;
+  let coords = { help: null, reg: null, search: null };
+
+  function showTab(name) {
+    ['help', 'register', 'search'].forEach(t => {
+      document.getElementById(`tab-${t}`).classList.toggle('active', t === name);
+      document.getElementById(`tab-${t}-btn`).classList.toggle('active', t === name);
+    });
+    document.getElementById('pulse-wrap').classList.toggle('fast', name === 'help');
+  }
+
+  function setStatus(el, type, text) {
+    el.className = `status-msg show ${type}`;
+    el.innerText = text;
+  }
+
+  // Fast location: network-based (not GPS lock), short timeout, reuse recent fix.
+  function detectLocation(mode) {
+    const statusEl = document.getElementById(`${mode}-location-status`);
+    const btnEl = document.getElementById(`${mode}-locate-btn`);
+
+    if (!navigator.geolocation) {
+      statusEl.className = 'location-status err';
+      statusEl.innerText = "Your browser doesn't support location detection.";
+      return;
+    }
+
+    statusEl.className = 'location-status';
+    statusEl.innerText = "Detecting your location...";
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        coords[mode] = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        statusEl.className = 'location-status ok';
+        statusEl.innerText = "Location detected.";
+        btnEl.classList.add('detected');
+      },
+      () => {
+        statusEl.className = 'location-status err';
+        statusEl.innerText = "Couldn't detect location. Please allow location access.";
+      },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+    );
+  }
+
+  function renderDonorCards(container, donors, emptyText) {
+    if (donors.length === 0) {
+      container.innerHTML = `<div class="empty-state">${emptyText}</div>`;
+      return;
+    }
+    container.innerHTML = donors.map(d => `
+      <div class="donor-card">
+        <div>
+          <div class="donor-name">${d.name}</div>
+          <div class="donor-meta">${d.phone} · ${d.city || 'Location on file'}</div>
+        </div>
+        <span class="blood-tag">${d.bloodGroup}</span>
+      </div>
+    `).join('');
+  }
+
+  // Renders donors as pinging nodes on the radar. Positions are illustrative
+  // (angle/distance scaled within the search radius), not exact GPS placement.
+  function renderRadar(prefix, donors, radiusKm) {
+    const wrap = document.getElementById(`${prefix}-radar`);
+    const stage = document.getElementById(`${prefix}-radar-stage`);
+    const caption = document.getElementById(`${prefix}-radar-caption`);
+
+    // clear old nodes
+    stage.querySelectorAll('.radar-node').forEach(n => n.remove());
+
+    wrap.classList.add('show');
+
+    donors.forEach((d, i) => {
+      const angle = (i / Math.max(donors.length, 1)) * 2 * Math.PI + (i * 0.7);
+      const distFraction = 0.25 + ((i % 3) * 0.25); // spread across rings
+      const x = 50 + Math.cos(angle) * distFraction * 50;
+      const y = 50 + Math.sin(angle) * distFraction * 50;
+
+      const node = document.createElement('div');
+      node.className = 'radar-node';
+      node.style.left = `${x}%`;
+      node.style.top = `${y}%`;
+      node.style.animationDelay = `${i * 0.15}s`;
+      node.setAttribute('data-tip', `${d.name} · ${d.phone}`);
+      node.innerText = d.bloodGroup;
+      stage.appendChild(node);
+    });
+
+    caption.innerHTML = donors.length > 0
+      ? `<strong>${donors.length}</strong> donor(s) detected within ${radiusKm} km`
+      : `Scanning ${radiusKm} km radius — no donors detected yet`;
+  }
+
+  // Keep one map instance per section (creating a new Leaflet map on the same
+  // div twice throws an error, so we create it once and just update it after that).
+  const mapInstances = {};
+
+  function renderMap(prefix, myCoords, donors) {
+    const wrap = document.getElementById(`${prefix}-map-wrap`);
+    wrap.classList.add('show');
+
+    // Leaflet needs the div to be visible *before* it initializes,
+    // so we create the map only the first time this runs for this section.
+    if (!mapInstances[prefix]) {
+      mapInstances[prefix] = L.map(`${prefix}-map`, { zoomControl: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18
+      }).addTo(mapInstances[prefix]);
+      mapInstances[prefix]._markersLayer = L.layerGroup().addTo(mapInstances[prefix]);
+    }
+
+    const map = mapInstances[prefix];
+
+    // Leaflet sometimes miscalculates size if the container was hidden (display:none)
+    // when the map was created. This forces it to recalculate now that it's visible.
+    setTimeout(() => map.invalidateSize(), 100);
+
+    // Clear old markers before drawing new ones
+    map._markersLayer.clearLayers();
+
+    // Blue marker for "you" (the person searching)
+    const youIcon = L.divIcon({
+      className: '', html: '<div style="width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid white;box-shadow:0 0 6px rgba(37,99,235,0.8);"></div>',
+      iconSize: [16, 16], iconAnchor: [8, 8]
+    });
+    L.marker([myCoords.latitude, myCoords.longitude], { icon: youIcon })
+      .addTo(map._markersLayer)
+      .bindPopup("You are here");
+
+    const bounds = [[myCoords.latitude, myCoords.longitude]];
+
+    // Red marker for each matching donor, using the coordinates the backend returned
+    donors.forEach(d => {
+      if (!d.location || !d.location.coordinates) return; // skip if location missing
+      const lng = d.location.coordinates[0];
+      const lat = d.location.coordinates[1];
+      L.marker([lat, lng])
+        .addTo(map._markersLayer)
+        .bindPopup(`<b>${d.name}</b><br>${d.bloodGroup} · ${d.phone}`);
+      bounds.push([lat, lng]);
+    });
+
+    // Zoom/pan the map so every marker is visible
+    if (bounds.length > 1) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    } else {
+      map.setView(bounds[0], 13);
+    }
+  }
+
+  async function submitHelp() {
+    const statusEl = document.getElementById('help-status');
+    if (!coords.help) {
+      setStatus(statusEl, 'error', "Please use 'my current location' first.");
+      return;
+    }
+    const radiusKm = parseFloat(document.getElementById('help-radius').value) || 10;
+    const body = {
+      patientName: document.getElementById('help-patient').value,
+      bloodGroup: document.getElementById('help-blood').value,
+      hospitalName: document.getElementById('help-hospital').value,
+      contactNumber: document.getElementById('help-contact').value,
+      city: document.getElementById('help-city').value,
+      latitude: coords.help.latitude,
+      longitude: coords.help.longitude,
+      radiusKm: radiusKm
+    };
+
+    setStatus(statusEl, 'info', 'Searching for donors nearby...');
+
+    try {
+      const res = await fetch(`${API_BASE}/emergency/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+      const resultsDiv = document.getElementById('help-results');
+
+      if (!res.ok || !json.success) {
+        setStatus(statusEl, 'error', json.message || 'Something went wrong.');
+        return;
+      }
+
+      const donors = json.data.matchingDonors;
+      setStatus(statusEl, 'success', json.message);
+      renderRadar('help', donors, radiusKm);
+      renderMap('help', coords.help, donors);
+
+      resultsDiv.innerHTML = '<h3>Matching donors</h3>';
+      const list = document.createElement('div');
+      renderDonorCards(list, donors, 'No donors found nearby yet. Your request has been saved.');
+      resultsDiv.appendChild(list);
+    } catch (e) {
+      setStatus(statusEl, 'error', 'Could not reach the server. Is it running?');
+    }
+  }
+
+  async function register() {
+    const statusEl = document.getElementById('reg-status');
+    if (!coords.reg) {
+      setStatus(statusEl, 'error', "Please detect your location first.");
+      return;
+    }
+    const body = {
+      name: document.getElementById('reg-name').value,
+      bloodGroup: document.getElementById('reg-blood').value,
+      phone: document.getElementById('reg-phone').value,
+      email: document.getElementById('reg-email').value,
+      city: document.getElementById('reg-city').value,
+      latitude: coords.reg.latitude,
+      longitude: coords.reg.longitude
+    };
+    try {
+      const res = await fetch(`${API_BASE}/donors/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+      setStatus(statusEl, json.success ? 'success' : 'error', json.message);
+      if (json.success) loadStats();
+    } catch (e) {
+      setStatus(statusEl, 'error', 'Could not reach the server. Is it running?');
+    }
+  }
+
+  async function search() {
+    const resultsDiv = document.getElementById('results');
+    if (!coords.search) {
+      resultsDiv.innerHTML = '<div class="empty-state">Please use your current location first.</div>';
+      return;
+    }
+    const bloodGroup = document.getElementById('search-blood').value;
+    const radiusKm = parseFloat(document.getElementById('search-radius').value) || 10;
+    const url = `${API_BASE}/donors/search?bloodGroup=${encodeURIComponent(bloodGroup)}&lat=${coords.search.latitude}&lng=${coords.search.longitude}&radiusKm=${radiusKm}`;
+
+    resultsDiv.innerHTML = '<div class="empty-state">Searching...</div>';
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      const donors = json.data || [];
+
+      renderRadar('search', donors, radiusKm);
+      renderMap('search', coords.search, donors);
+
+      resultsDiv.innerHTML = '<h3>Results</h3>';
+      const list = document.createElement('div');
+      renderDonorCards(list, donors, 'No donors found nearby.');
+      resultsDiv.appendChild(list);
+    } catch (e) {
+      resultsDiv.innerHTML = '<div class="empty-state">Could not reach the server. Is it running?</div>';
+    }
+  }
+
+  // Animated count-up for the live "donors in network" stat
+  function animateCount(el, target) {
+    let current = 0;
+    const step = Math.max(1, Math.ceil(target / 30));
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= target) { current = target; clearInterval(timer); }
+      el.innerText = current;
+    }, 30);
+  }
+
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API_BASE}/donors`);
+      const json = await res.json();
+      const donors = json.data || [];
+      animateCount(document.getElementById('stat-donors'), donors.length);
+    } catch (e) {
+      // backend not running yet - keep at 0, fail silently
+    }
+  }
+
+  loadStats();
+</script>
+
+</body>
+</html>
