@@ -3,7 +3,7 @@
 A Spring Boot + MongoDB app that lets people register as blood donors,
 and lets others search for nearby available donors by blood group in an emergency.
 
-## How it works (plain English)
+## How it works 
 
 1. A donor registers with their name, blood group, phone number, and location.
 2. In an emergency, someone searches by blood group + their own location.
@@ -130,32 +130,9 @@ Just open `frontend/index.html` in your browser (double-click it, or use VS Code
 }
 ```
 
-## Ideas to extend it (if you have extra time before submission)
 
-- ✅ **Email alerts** — done. When someone submits an emergency request, every matching donor with an
-  email on file automatically gets an alert email. See "Setting up Email Alerts" below.
-- ✅ **Live map view** — done. Both the "Need Blood" and "Search" tabs show a Leaflet.js map with the
-  searcher's location (blue) and matching donors (red pins). No API key needed.
-- Add login (Spring Security) so donors can edit their own profile.
-- Add a "request history" so hospitals can track past requests.
 
-## Setting up Email Alerts
 
-1. Open `src/main/resources/application.properties`
-2. You need a Gmail **App Password** (not your normal password — Google blocks that):
-   - Go to https://myaccount.google.com/security
-   - Turn on 2-Step Verification if it isn't already on
-   - Search "App Passwords" on that page, create one (name it "PulseApp"), copy the 16-character code
-3. Replace these two lines with your details:
-   ```properties
-   spring.mail.username=youremail@gmail.com
-   spring.mail.password=your16charapppassword
-   ```
-4. Restart the app. Now, whenever someone submits an emergency request, every matching donor who
-   registered with an email gets notified automatically.
-
-**Note:** Donors without an email on file are simply skipped — the app never crashes because of a
-missing or invalid email, it just logs it and moves on.
 
 ## Live Map
 
@@ -164,8 +141,3 @@ required (unlike Google Maps). It shows:
 - A blue marker for your current location
 - A red marker for each matching donor, with their name/blood group/phone in a popup on click
 
-## Pitch line for judges
-
-> "In a medical emergency, finding a matching blood donor fast can save a life.
-> Our app instantly connects people in need with nearby, available donors of
-> the right blood group — using real-time geolocation search."
